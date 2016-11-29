@@ -51,9 +51,6 @@ class AnimalNet():
             filt = self._get_conv_filter(net_data, name)
             conv_biases = self._get_bias(net_data, name)
 
-            # conv = tf.nn.conv2d(bottom, filt, stride, padding='SAME')
-            # bias = tf.nn.bias_add(conv, conv_biases)
-
             if group == 1:
                 conv = tf.nn.conv2d(bottom, filt, stride, padding='SAME')
             else:
@@ -82,89 +79,16 @@ class AnimalNet():
                 input = tf.placeholder(tf.float32, [None, 227, 227, 3], name='input')
                 labels = tf.placeholder(tf.float32, shape=(None, 10), name='labels')
 
-                # with tf.variable_scope("Conv1_pool1"):
-                #     W = tf.get_variable("weights", shape=[11, 11, 3, 96],
-                #                         initializer=tf.constant_initializer(net_data["conv1"][0]),
-                #                         regularizer=self.regularizer,
-                #                         trainable=False)
-                #     b = tf.get_variable("biases", shape=[96],
-                #                         initializer=tf.constant_initializer(net_data["conv1"][1]),
-                #                         trainable=False)
-                #     conv = tf.nn.conv2d(input, W, [1, 4, 4, 1], padding='SAME')
-                #     bias = tf.nn.bias_add(conv, b)
-                #     conv1 = tf.nn.relu(bias)
-                #     pool1 = tf.nn.max_pool(conv1,
-                #                            ksize=[1, 3, 3, 1],
-                #                            strides=[1, 2, 2, 1],
-                #                            padding='VALID',
-                #                            name='pool1')
-                #
-                # ALEXNET
-                conv1 = self._conv_layer(input, "conv1", net_data, stride=[1, 4, 4, 1])
-                pool1 = self._max_pool(conv1, "pool1")
-                conv2 = self._conv_layer(pool1, "conv2", net_data, group=2)
-                pool2 = self._max_pool(conv2, "pool2")
-                conv3 = self._conv_layer(pool2, "conv3", net_data)
-                conv4 = self._conv_layer(conv3, "conv4", net_data, group=2)
-                conv5 = self._conv_layer(conv4, "conv5", net_data, group=2)
-                pool5 = self._max_pool(conv5, "pool5")
+            # ALEXNET
+            conv1 = self._conv_layer(input, "conv1", net_data, stride=[1, 4, 4, 1])
+            pool1 = self._max_pool(conv1, "pool1")
+            conv2 = self._conv_layer(pool1, "conv2", net_data, group=2)
+            pool2 = self._max_pool(conv2, "pool2")
+            conv3 = self._conv_layer(pool2, "conv3", net_data)
+            conv4 = self._conv_layer(conv3, "conv4", net_data, group=2)
+            conv5 = self._conv_layer(conv4, "conv5", net_data, group=2)
+            pool5 = self._max_pool(conv5, "pool5")
 
-            # with tf.variable_scope("Conv2_pool2"):
-            #     W = tf.get_variable("weights", shape=[5, 5, 96, 256],
-            #                         initializer=tf.constant_initializer(net_data["conv2"][0]),
-            #                         regularizer=self.regularizer,
-            #                         trainable=False)
-            #     b = tf.get_variable("biases", shape=[256],
-            #                         initializer=tf.constant_initializer(net_data["conv2"][1]),
-            #                         trainable=False)
-            #     conv = tf.nn.conv2d(pool1, W, [1, 1, 1, 1], padding='SAME')
-            #     bias = tf.nn.bias_add(conv, b)
-            #     conv2 = tf.nn.relu(bias)
-            #     pool2 = tf.nn.max_pool(conv2,
-            #                            ksize=[1, 3, 3, 1],
-            #                            strides=[1, 2, 2, 1],
-            #                            padding='VALID',
-            #                            name='pool2')
-            #
-            # with tf.variable_scope("Conv3"):
-            #     W = tf.get_variable("weights", shape=[3, 3, 256, 384],
-            #                         initializer=tf.constant_initializer(net_data["conv3"][0]),
-            #                         regularizer=self.regularizer,
-            #                         trainable=False)
-            #     b = tf.get_variable("biases", shape=[384],
-            #                         initializer=tf.constant_initializer(net_data["conv3"][1]),
-            #                         trainable=False)
-            #     conv = tf.nn.conv2d(pool2, W, [1, 1, 1, 1], padding='SAME')
-            #     bias = tf.nn.bias_add(conv, b)
-            #     conv3 = tf.nn.relu(bias)
-            #
-            # with tf.variable_scope("Conv4"):
-            #     W = tf.get_variable("weights", shape=[3, 3, 384, 384],
-            #                         initializer=tf.constant_initializer(net_data["conv4"][0]),
-            #                         regularizer=self.regularizer,
-            #                         trainable=False)
-            #     b = tf.get_variable("biases", shape=[384],
-            #                         initializer=tf.constant_initializer(net_data["conv4"][1]))
-            #     conv = tf.nn.conv2d(conv3, W, [1, 1, 1, 1], padding='SAME')
-            #     bias = tf.nn.bias_add(conv, b)
-            #     conv4 = tf.nn.relu(bias)
-            #
-            # with tf.variable_scope("Conv5_pool5"):
-            #     W = tf.get_variable("weights", shape=[3, 3, 384, 256],
-            #                         initializer=tf.constant_initializer(net_data["conv5"][0]),
-            #                         regularizer=self.regularizer,
-            #                         trainable=False)
-            #     b = tf.get_variable("biases", shape=[256],
-            #                         initializer=tf.constant_initializer(net_data["conv5"][1]))
-            #     conv = tf.nn.conv2d(conv4, W, [1, 1, 1, 1], padding='SAME')
-            #     bias = tf.nn.bias_add(conv, b)
-            #     conv5 = tf.nn.relu(bias)
-            #     pool5 = tf.nn.max_pool(conv5,
-            #                            ksize=[1, 3, 3, 1],
-            #                            strides=[1, 2, 2, 1],
-            #                            padding='VALID',
-            #                            name='pool5')
-            #
             with tf.variable_scope("Fully_Connected1"):
                 flat_pool5 = tf.contrib.layers.flatten(pool5)
                 W = tf.get_variable("weights", shape=[9216, 1024],
