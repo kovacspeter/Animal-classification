@@ -31,10 +31,28 @@ class Dataset():
         self.train_labels = self._dense_to_one_hot(train_labels, n_classes)
         self.val_labels = self._dense_to_one_hot(val_labels, n_classes)
         # Load actual images
-        self.train = np.array([self._load_image(img) for img in trainimages])
-        self.val = np.array([self._load_image(img) for img in valimages])
-        self.test = np.array([self._load_image(img) for img in testimages])
+        self.train = np.array([np.asarray(self._load_image(img), np.float32) for img in trainimages])
+        self.val = np.array([np.asarray(self._load_image(img), np.float32) for img in valimages])
+        self.test = np.array([np.asarray(self._load_image(img), np.float32) for img in testimages])
 
+        # IMAGE MEAN SUBTRACTION -> did not really help, whole dataset mean subtraction did not help either
+        # for img in self.train:
+        #     mean = np.mean(img, 2)
+        #     img[:, :, 0] -= mean[0]
+        #     img[:, :, 1] -= mean[1]
+        #     img[:, :, 2] -= mean[2]
+        #
+        # for img in self.val:
+        #     mean = np.mean(img, 2)
+        #     img[:, :, 0] -= mean[0]
+        #     img[:, :, 1] -= mean[1]
+        #     img[:, :, 2] -= mean[2]
+        #
+        # for img in self.test:
+        #     mean = np.mean(img, 2)
+        #     img[:, :, 0] -= mean[0]
+        #     img[:, :, 1] -= mean[1]
+        #     img[:, :, 2] -= mean[2]
 
     def _load_image(self, file_name):
         if CV2_available:
