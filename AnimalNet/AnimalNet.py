@@ -91,7 +91,7 @@ class AnimalNet():
 
             with tf.variable_scope("Fully_Connected1"):
                 flat_pool5 = tf.contrib.layers.flatten(pool5)
-                W = tf.get_variable("weights", shape=[9216, 1024],
+                W = tf.get_variable("weights", shape=[flat_pool5.get_shape()[1], 1024],
                                     initializer=tf.contrib.layers.xavier_initializer(),
                                     regularizer=self.regularizer)
                 b = tf.get_variable("biases", shape=[1024],
@@ -148,7 +148,20 @@ class AnimalNet():
         return self.sess.run(self.forward_op, feed_dict)
 
     def train(self, x, y):
-        feed_dict = {self.input: x,
+        # REAL TIME DATA AUGMENTATION
+        less_than = lambda i: tf.less(i, x.get_shape()[0])
+
+        img = tf.placeholder('float32', [227,227,3])
+        with tf.name_scope("data_augmentation"):
+            flipped = tf.image.random_flip_left_right(img)
+            brightened = tf.image.random_brightness(flipped, 0.2)
+            contrasted = tf.image.random_contrast(brightened, 0.2, 1.8)
+        # TODO we may try to add some rotations eg. +/-20deg, zooming and blurring (eg. by gaussian filter)
+        new_x = []
+        for im in x:
+            new_x.append(self.sess.run(contrasted, {img: im}))
+
+        feed_dict = {self.input: new_x,
                      self.labels: y}
         return self.sess.run(self.train_op, feed_dict)
 
