@@ -9,19 +9,19 @@ except ImportError, e:
 
 class Dataset():
 
-    def __init__(self, data_folder, rescale_imgs=False, img_shape=None):
+    def __init__(self, rescale_imgs=False, img_shape=None, submission=False):
         # If you want to rescale images by default
         self.rescale_imgs = rescale_imgs
         self.img_shape = img_shape
 
-        trainimages = [data_folder + '/' + line.strip().split(" ")[0] for line in open(data_folder + "/trainset-overview.txt", "r")]
-        valimages = [data_folder + '/' + line.split(' ')[0] for line in open(data_folder + '/valset-overview.txt', 'r')]
-        testimages = [data_folder + '/' + line.strip().split(' ')[0] for line in open(data_folder + '/testset-overview-final.txt', 'r')]
+        self.trainimages = [line.strip().split(" ")[0] for line in open("trainset-overview.txt", "r")]
+        self.valimages = [line.split(' ')[0] for line in open('valset-overview.txt', 'r')]
+        self.testimages = [line.strip().split(' ')[0] for line in open('testset-overview-final.txt', 'r')]
 
         train_labels = np.array(
-            [int(line.strip().split(" ")[1]) for line in open(data_folder + "/trainset-overview.txt", "r")])
+            [int(line.strip().split(" ")[1]) for line in open("trainset-overview.txt", "r")])
         val_labels = np.array(
-            [int(line.rstrip().split(' ')[1]) for line in open(data_folder + '/valset-overview.txt', 'r')])
+            [int(line.rstrip().split(' ')[1]) for line in open('valset-overview.txt', 'r')])
 
         n_classes = len(np.unique(train_labels))
 
@@ -30,29 +30,22 @@ class Dataset():
         # Convert to One-Hot-Encoding
         self.train_labels = self._dense_to_one_hot(train_labels, n_classes)
         self.val_labels = self._dense_to_one_hot(val_labels, n_classes)
-        # Load actual images
-        self.train = np.array([np.asarray(self._load_image(img), np.float32) for img in trainimages])
-        self.val = np.array([np.asarray(self._load_image(img), np.float32) for img in valimages])
-        self.test = np.array([np.asarray(self._load_image(img), np.float32) for img in testimages])
 
-        # IMAGE MEAN SUBTRACTION -> did not really help, whole dataset mean subtraction did not help either
-        # for img in self.train:
-        #     mean = np.mean(img, 2)
-        #     img[:, :, 0] -= mean[0]
-        #     img[:, :, 1] -= mean[1]
-        #     img[:, :, 2] -= mean[2]
-        #
-        # for img in self.val:
-        #     mean = np.mean(img, 2)
-        #     img[:, :, 0] -= mean[0]
-        #     img[:, :, 1] -= mean[1]
-        #     img[:, :, 2] -= mean[2]
-        #
-        # for img in self.test:
-        #     mean = np.mean(img, 2)
-        #     img[:, :, 0] -= mean[0]
-        #     img[:, :, 1] -= mean[1]
-        #     img[:, :, 2] -= mean[2]
+        # Load actual images
+        self.train = np.array([np.asarray(self._load_image(img), np.float32) for img in self.trainimages])
+        self.val = np.array([np.asarray(self._load_image(img), np.float32) for img in self.valimages])
+        self.test = np.array([np.asarray(self._load_image(img), np.float32) for img in self.testimages])
+
+        all_data = np.concatenate([self.train, self.val, self.test])
+        mean = np.mean(all_data)
+
+        self.train -= mean
+        self.val -= mean
+        self.test -= mean
+
+        if submission:
+            self.train = np.concatenate([self.train, self.val])
+            self.train_labels = np.concatenate([self.train_labels, self.val_labels])
 
     def _load_image(self, file_name):
         if CV2_available:
@@ -88,6 +81,3 @@ class Dataset():
         indices = np.arange(len(self.train))
         np.random.shuffle(indices)
         return self.train[indices[:batch_size]], self.train_labels[indices[:batch_size]]
-
-    def get_validation(self):
-        return self.val, self.val_labels

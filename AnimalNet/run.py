@@ -2,47 +2,113 @@ from AnimalNet import AnimalNet
 import tensorflow as tf
 import numpy as np
 from data_utils import Dataset
-# Directory in which cifar data is saved
-DATA_DIR = '../data'
+import argparse
+
 # Directory for tensorflow logs
 LOG_DIR_DEFAULT = './logs/'
-EPOCHS = 2000
-BATCH_SIZE = 50
+MAX_STEPS_DEFAULT = 500
+BATCH_SIZE_DEFAULT = 50
+PRINT_FREQ_DEFAULT = 20
+SUBMISSION_DEFAULT = False
+DROPOUT_DEFAULT = 0
 
-# For reproducible research :)
-tf.set_random_seed(42)
-np.random.seed(42)
+def train():
+    submission = FLAGS.submission == "True"
 
-net = AnimalNet(num_classes=10, batch_size=BATCH_SIZE, dropout_rate=0.2)
-dataset = Dataset(DATA_DIR, rescale_imgs=True, img_shape=(227,227))
-images, labels = dataset.get_batch(BATCH_SIZE)
+    # For reproducible research :)
+    tf.set_random_seed(42)
+    np.random.seed(42)
+
+    dataset = Dataset(rescale_imgs=True, img_shape=(227, 227), submission=submission)
+    if not submission:
+        val_images, val_labels = dataset.val, dataset.val_labels
+
+    with tf.variable_scope("Input"):
+        input = tf.placeholder(tf.float32, [None, 227, 227, 3], name='input')
+        labels = tf.placeholder(tf.float32, shape=(None, 10), name='labels')
+        
+    net = AnimalNet(num_classes=10, dropout_rate=FLAGS.dropout)
+
+    stop_training_op = net._set_training_op(False)
+    start_training_op = net._set_training_op(True)
+
+    logits = net.inference(input)
+    loss_op = net.loss(logits, labels)
+    acc_op = net.accuracy(logits, labels)
+
+    with tf.Session() as sess:
+
+        # Training operation
+        train_op = tf.train.AdamOptimizer(1e-4).minimize(loss_op)
+
+        # Summary
+        # summary_op = tf.merge_all_summaries()
+
+        # Initialize variables
+        init_op = tf.initialize_all_variables()
+        sess.run(init_op)
+
+        for epoch in range(FLAGS.max_steps):
+            train_images, train_labels = dataset.get_batch(FLAGS.batch_size)
+
+            train_feed_dict = {input: train_images,
+                               labels: train_labels}
+
+            if (epoch+1) % FLAGS.print_freq == 0:
+                _, loss, acc = sess.run([stop_training_op, loss_op, acc_op], train_feed_dict)
+                print("********** Step :", epoch, "of", FLAGS.max_steps, "**********")
+
+                print("Train set accuracy is: ", acc)
+                print("Train set loss is: ", loss)
+                print("--------------------------------------------------")
+
+                if not submission:
+                    val_feed_dict = {input: val_images,
+                                       labels: val_labels}
+
+                    loss, acc = sess.run([loss_op, acc_op], val_feed_dict)
+
+                    print("Validation set accuracy is: ", acc)
+                    print("Validation set loss is: ", loss)
+                    print("--------------------------------------------------")
+
+            else:
+                sess.run([start_training_op, train_op], train_feed_dict)
+
+            # TODO summaries
+            # TODO model saving/loading
 
 
-for epoch in range(EPOCHS):
-    net.set_training(True)
-    images, labels = dataset.get_batch(BATCH_SIZE)
-    net.train(images, labels)
+        #We save your predictions to file
+        if submission:
+            test_p_file = open('submission.csv','w')
+            test_p_file.write('ImageName,Prediction\n')
+            test_feed_dict = {input: dataset.test}
+            predictions = sess.run(logits, test_feed_dict)
+            test_labels = np.argmax(predictions, 1)
 
-    if epoch % 20 == 0:
-        net.set_training(False)
-        print("********** Step :", epoch, "of", EPOCHS, "**********")
-        val_images, val_labels = dataset.get_validation()
+            for i, image in enumerate(dataset.testimages):
 
-        train_acc = net.accuracy(images, labels)
-        train_loss = net.loss(images, labels)
+                test_p_file.write(image+','+str(test_labels[i])+'\n')
+            test_p_file.close()
 
+if __name__ == '__main__':
+    # Command line arguments
+    parser = argparse.ArgumentParser()
 
-        print("Train set accuracy is: ", train_acc)
-        print("Train set loss is: ", train_loss)
-        print("--------------------------------------------------")
+    parser.add_argument('--max_steps', type = int, default = MAX_STEPS_DEFAULT,
+                      help='Number of steps to run trainer.')
+    parser.add_argument('--dropout', type=float, default=DROPOUT_DEFAULT,
+                        help='Dropout on last fully connected layers')
+    parser.add_argument('--batch_size', type = int, default = BATCH_SIZE_DEFAULT,
+                      help='Batch size to run trainer.')
+    parser.add_argument('--print_freq', type = int, default = PRINT_FREQ_DEFAULT,
+                      help='Frequency of evaluation')
+    parser.add_argument('--log_dir', type = str, default = LOG_DIR_DEFAULT,
+                      help='Summaries log directory')
+    parser.add_argument('--submission', type=str, default=SUBMISSION_DEFAULT,
+                        help='Will also train on validation data')
 
+    FLAGS, unparsed = parser.parse_known_args()
 
-        val_acc = net.accuracy(val_images, val_labels)
-        val_loss = net.loss(val_images, val_labels)
-
-        print("Validation set accuracy is: ", val_acc)
-        print("Validation set loss is: ", val_loss)
-        print("--------------------------------------------------")
-
-        # TODO summaries
-        # TODO model saving/loading
+    train()

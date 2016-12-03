@@ -8,7 +8,6 @@ class AnimalNet():
                  regularizer=tf.contrib.layers.l2_regularizer,
                  regularization_scale=0.,
                  learning_rate=3e-4,
-                 batch_size=10,
                  is_training = tf.Variable(True)):
         # initializer = tf.contrib.layers.xavier_initialize,
         # init_scales = None): TODO ???
@@ -20,21 +19,6 @@ class AnimalNet():
         self.regularizer = regularizer(scale=regularization_scale)
         self.is_training = is_training
         # self.initializer = initializer()
-
-        # Network operations
-        self.sess = tf.Session()
-        self.input, self.labels, self.forward_op, self.loss_op, self.accuracy_op = \
-            self._build_alexnet(self._load_weights('bvlc_alexnet.npy'))
-
-        # Training operation
-        self.train_op = self.optimizer.minimize(self.loss_op)
-
-        # Summary
-        self.summary_op = tf.merge_all_summaries()
-
-        # Initialize variables
-        init_op = tf.initialize_all_variables()
-        self.sess.run(init_op)
 
 
     def _load_weights(self, file):
@@ -68,19 +52,17 @@ class AnimalNet():
     def _max_pool(self, bottom, name):
         return tf.nn.max_pool(bottom, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='VALID', name=name)
 
+    def _set_training_op(self, is_training):
+        return self.is_training.assign(tf.constant(is_training))
 
-    def set_training(self, is_training):
-        self.sess.run(self.is_training.assign(tf.constant(is_training)))
 
-    def _build_alexnet(self, net_data):
+    def inference(self, x):
+
+        net_data = self._load_weights('bvlc_alexnet.npy')
 
         with tf.variable_scope("AlexNet"):
-            with tf.variable_scope("Input"):
-                input = tf.placeholder(tf.float32, [None, 227, 227, 3], name='input')
-                labels = tf.placeholder(tf.float32, shape=(None, 10), name='labels')
-
             # ALEXNET
-            conv1 = self._conv_layer(input, "conv1", net_data, stride=[1, 4, 4, 1])
+            conv1 = self._conv_layer(x, "conv1", net_data, stride=[1, 4, 4, 1])
             pool1 = self._max_pool(conv1, "pool1")
             conv2 = self._conv_layer(pool1, "conv2", net_data, group=2)
             pool2 = self._max_pool(conv2, "pool2")
@@ -91,91 +73,59 @@ class AnimalNet():
 
             with tf.variable_scope("Fully_Connected1"):
                 flat_pool5 = tf.contrib.layers.flatten(pool5)
-                W = tf.get_variable("weights", shape=[flat_pool5.get_shape()[1], 1024],
+                W = tf.constant(net_data['fc6'][0], name="weights")
+                b = tf.constant(net_data['fc6'][1], name="biases")
+
+                fc1 = tf.nn.relu(tf.matmul(flat_pool5, W) + b)
+
+            with tf.variable_scope("Fully_Connected2"):
+                W = tf.constant(net_data['fc7'][0], name="weights")
+                b = tf.constant(net_data['fc7'][1], name="biases")
+                fc2 = tf.nn.relu(tf.matmul(fc1, W) + b)
+
+            with tf.variable_scope("Fully_Connected3_trainable"):
+                W = tf.get_variable("weights", shape=[4096, 1024],
                                     initializer=tf.contrib.layers.xavier_initializer(),
                                     regularizer=self.regularizer)
                 b = tf.get_variable("biases", shape=[1024],
-                                    initializer=tf.constant_initializer(0.0))
-                fc1 = tf.nn.relu(tf.matmul(flat_pool5, W) + b)
-                fc1 = tf.cond(self.is_training, lambda: tf.nn.dropout(fc1, self.keep_prob), lambda: fc1)
+                                    initializer=tf.constant_initializer(0.1))
+                fc3 = tf.nn.relu(tf.matmul(fc2, W) + b)
+                fc3 = tf.cond(self.is_training, lambda: tf.nn.dropout(fc3, self.keep_prob), lambda: fc3)
 
-            # with tf.variable_scope("Fully-Connected2"):
-            #     W = tf.get_variable("weights", shape=[4096, 1024],
-            #                         initializer=tf.contrib.layers.xavier_initializer(),
-            #                         regularizer=self.regularizer)
-            #     b = tf.get_variable("biases", shape=[1024],
-            #                              initializer=tf.constant_initializer(0.0))
-            #
-            #     fc2 = tf.nn.relu(tf.matmul(fc1, W) + b)
-
-            with tf.variable_scope("Fully_Connected3"):
+            with tf.variable_scope("Fully_Connected4_trainable"):
                 W = tf.get_variable("weights", shape=[1024, 10],
                                     initializer=tf.contrib.layers.xavier_initializer(),
                                     regularizer=self.regularizer)
                 b = tf.get_variable("biases", shape=[10],
-                                    initializer=tf.constant_initializer(0.0))
+                                    initializer=tf.constant_initializer(0.1))
 
-                fc3 = tf.matmul(fc1, W) + b
-                fc3 = tf.cond(self.is_training, lambda: tf.nn.dropout(fc3, self.keep_prob), lambda: fc3)
+                fc4 = tf.matmul(fc3, W) + b
+                logits = tf.cond(self.is_training, lambda: tf.nn.dropout(fc4, self.keep_prob), lambda: fc4)
 
-            with tf.variable_scope("Predictions"):
-                probs = tf.nn.softmax(fc3)
+        return logits
 
-            with tf.name_scope("Loss"):
-                with tf.name_scope("Cross_entropy_loss"):
-                    function_loss = tf.nn.softmax_cross_entropy_with_logits(fc3, labels)
-                    cross_entropy = tf.reduce_mean(function_loss)
-                    tf.scalar_summary("Cross entropy", cross_entropy)
+    def loss(self, logits, labels):
+        with tf.name_scope("Loss"):
+            with tf.name_scope("Cross_entropy_loss"):
+                function_loss = tf.nn.softmax_cross_entropy_with_logits(logits, labels)
+                cross_entropy = tf.reduce_mean(function_loss)
+                tf.scalar_summary("Cross entropy", cross_entropy)
 
-                with tf.name_scope("Regularization_loss"):
-                    reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-                    reg_loss = tf.reduce_sum(reg_losses)
-                    tf.scalar_summary("Regularization loss", reg_loss)
+            with tf.name_scope("Regularization_loss"):
+                reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+                reg_loss = tf.reduce_sum(reg_losses)
+                tf.scalar_summary("Regularization loss", reg_loss)
 
-                with tf.name_scope("Total_loss"):
-                    loss = cross_entropy + reg_loss
-                    tf.scalar_summary("Total loss", loss)
+            with tf.name_scope("Total_loss"):
+                loss = cross_entropy + reg_loss
+                tf.scalar_summary("Total loss", loss)
 
-            with tf.name_scope("Accuracy"):
-                correct_prediction = tf.equal(tf.argmax(fc3, 1), tf.argmax(labels, 1))
-                accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-                tf.scalar_summary('Accuracy', accuracy)
+        return loss
 
-            return input, labels, probs, loss, accuracy
+    def accuracy(self, logits, labels):
+        with tf.name_scope("Accuracy"):
+            correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
+            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+            tf.scalar_summary('Accuracy', accuracy)
 
-    def predict(self, x):
-        feed_dict = {self.input: x}
-        return self.sess.run(self.forward_op, feed_dict)
-
-    def train(self, x, y):
-        # REAL TIME DATA AUGMENTATION
-        less_than = lambda i: tf.less(i, x.get_shape()[0])
-
-        img = tf.placeholder('float32', [227,227,3])
-        with tf.name_scope("data_augmentation"):
-            flipped = tf.image.random_flip_left_right(img)
-            brightened = tf.image.random_brightness(flipped, 0.2)
-            contrasted = tf.image.random_contrast(brightened, 0.2, 1.8)
-        # TODO we may try to add some rotations eg. +/-20deg, zooming and blurring (eg. by gaussian filter)
-        new_x = []
-        for im in x:
-            new_x.append(self.sess.run(contrasted, {img: im}))
-
-        feed_dict = {self.input: new_x,
-                     self.labels: y}
-        return self.sess.run(self.train_op, feed_dict)
-
-    def loss(self, x, y):
-        feed_dict = {self.input: x,
-                     self.labels: y}
-        return self.sess.run(self.loss_op, feed_dict)
-
-    def do_summary(self, x, y):
-        feed_dict = {self.input: x,
-                     self.labels: y}
-        return self.sess.run(self.summary_op, feed_dict)
-
-    def accuracy(self, x, y):
-        feed_dict = {self.input: x,
-                     self.labels: y}
-        return self.sess.run(self.accuracy_op, feed_dict)
+        return accuracy
