@@ -11,7 +11,6 @@ Project for Applied Machine Learning at University of Amsterdam.
 # TODO
 1. Data Augmentation
 2. Loading/Saving of model
-3. Hyperparameter input parser
 4. Summaries
 
 
