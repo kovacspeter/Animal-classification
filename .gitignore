@@ -92,3 +92,4 @@ ENV/
 .DS_Store
 bvlc_alexnet.npy
 *.sh
+vgg16_weights.npz
