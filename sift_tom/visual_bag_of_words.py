@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.metrics import euclidean_distances
 from sklearn.cluster import MiniBatchKMeans, KMeans
 from sklearn.neighbors import KNeighborsClassifier
-from pysift import sift
+import sift
 
 logger = logging.getLogger(__file__)
 data_path = '../AnimalNet/'
@@ -15,8 +15,8 @@ def get_sift_points_from_image(image_path):
     # calculate several types of points of interest from an image
     # HYPER PARAMETERS HERE
     dense_points = sift.dense_points(image_path, stride=25)
-    hessian_points = sift.compute_hes(image_path, sigma=1.0, magThreshold=15, hesThreshold=10, NMSneighborhood=10)
-    harris_points = sift.computeHar(image_path, sigma=1.0, magThreshold=5, NMSneighborhood=10)
+    hessian_points = sift.compute_hesssian_points(image_path, sigma=1.0, mag_threshold=15, hes_threshold=10, nms_neighborhood=10)
+    harris_points = sift.compute_harris_points(image_path, sigma=1.0, mag_threshold=5, nms_neighborhood=10)
 
     # combine dense, harris and hessian interest points
     points = np.concatenate((dense_points, hessian_points, harris_points))
@@ -28,8 +28,8 @@ def get_sift_points_from_image(image_path):
 def get_sift_features_from_image(image_path):
     # calc SIFT features from sift points - 128 dim vector per SIFT point - some SIFT points will be discarded
     points = get_sift_points_from_image(image_path)
-    _, sift_features = sift.computeSIFTofPoints(image_path, points,
-                                                sigma=1.0, nrOrientBins=8, nrSpatBins=4, nrPixPerBin=4)
+    _, sift_features = sift.compute_sift_to_points(image_path, points,
+                                                sigma=1.0, nr_orient_bins=8, nr_spat_bins=4, nr_pix_per_bin=4)
     logger.debug("There are {} SIFT features in image {}".format(len(sift_features), image_path))
     return sift_features
 
@@ -141,7 +141,7 @@ def compute_accuracy(predictions, truth):
     return (np.sum(predictions == truth)) / len(truth)
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
     train_images = get_train_images()
     train_labels = get_train_labels()
@@ -154,7 +154,7 @@ if __name__ == "__main__":
             train_features = np.load('train_features.npy')
         else:
             train_features = get_sift_features_from_images(train_images[:10], 'train')
-        create_clusters(train_features)
+        #create_clusters(train_features)
 
     # create histograms
     if False:
