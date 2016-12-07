@@ -7,6 +7,8 @@ except ImportError, e:
     from PIL import Image
     CV2_available = False
 
+DATA_DIR = '../data/'
+
 class Dataset():
 
     def __init__(self, rescale_imgs=False, img_shape=None, submission=False):
@@ -14,14 +16,14 @@ class Dataset():
         self.rescale_imgs = rescale_imgs
         self.img_shape = img_shape
 
-        self.trainimages = [line.strip().split(" ")[0] for line in open("trainset-overview.txt", "r")]
-        self.valimages = [line.split(' ')[0] for line in open('valset-overview.txt', 'r')]
-        self.testimages = [line.strip().split(' ')[0] for line in open('testset-overview-final.txt', 'r')]
+        self.trainimages = [line.strip().split(" ")[0] for line in open(DATA_DIR + "trainset-overview.txt", "r")]
+        self.valimages = [line.split(' ')[0] for line in open(DATA_DIR + 'valset-overview.txt', 'r')]
+        self.testimages = [line.strip().split(' ')[0] for line in open(DATA_DIR + 'testset-overview-final.txt', 'r')]
 
         train_labels = np.array(
-            [int(line.strip().split(" ")[1]) for line in open("trainset-overview.txt", "r")])
+            [int(line.strip().split(" ")[1]) for line in open(DATA_DIR + "trainset-overview.txt", "r")])
         val_labels = np.array(
-            [int(line.rstrip().split(' ')[1]) for line in open('valset-overview.txt', 'r')])
+            [int(line.rstrip().split(' ')[1]) for line in open(DATA_DIR + 'valset-overview.txt', 'r')])
 
         n_classes = len(np.unique(train_labels))
 
@@ -32,9 +34,9 @@ class Dataset():
         self.val_labels = self._dense_to_one_hot(val_labels, n_classes)
 
         # Load actual images
-        self.train = np.array([np.asarray(self._load_image(img), np.float32) for img in self.trainimages])
-        self.val = np.array([np.asarray(self._load_image(img), np.float32) for img in self.valimages])
-        self.test = np.array([np.asarray(self._load_image(img), np.float32) for img in self.testimages])
+        self.train = np.array([np.asarray(self._load_image(DATA_DIR + img), np.float32) for img in self.trainimages])
+        self.val = np.array([np.asarray(self._load_image(DATA_DIR + img), np.float32) for img in self.valimages])
+        self.test = np.array([np.asarray(self._load_image(DATA_DIR + img), np.float32) for img in self.testimages])
 
         all_data = np.concatenate([self.train, self.val, self.test])
         mean = np.mean(all_data)
