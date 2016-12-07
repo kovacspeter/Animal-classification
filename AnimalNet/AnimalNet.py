@@ -7,7 +7,7 @@ class AnimalNet_Alex():
                  optimizer=tf.train.AdamOptimizer,
                  regularizer=tf.contrib.layers.l2_regularizer,
                  regularization_scale=0.,
-                 learning_rate=3e-4,
+                 learning_rate=1e-4,
                  is_training = tf.Variable(True)):
         # initializer = tf.contrib.layers.xavier_initialize,
         # init_scales = None): TODO ???
@@ -56,7 +56,7 @@ class AnimalNet_Alex():
         return self.is_training.assign(tf.constant(is_training))
 
 
-    def inference(self, x):
+    def inference(self, x, features_layer="AlexNet/Fully_Connected2/Relu:0"):
 
         net_data = self._load_weights('bvlc_alexnet.npy')
 
@@ -83,18 +83,20 @@ class AnimalNet_Alex():
                 b = tf.constant(net_data['fc7'][1], name="biases")
                 fc2 = tf.nn.relu(tf.matmul(fc1, W) + b)
 
+            features = tf.get_default_graph().get_tensor_by_name(features_layer)
+            # OUR CLASSIFIER
             with tf.variable_scope("Fully_Connected3_trainable"):
                 W = tf.get_variable("weights", shape=[4096, 1024],
-                                    initializer=tf.contrib.layers.xavier_initializer(),
+                                    initializer=tf.random_normal_initializer(stddev=1e-4),
                                     regularizer=self.regularizer)
                 b = tf.get_variable("biases", shape=[1024],
                                     initializer=tf.constant_initializer(0.1))
-                fc3 = tf.nn.relu(tf.matmul(fc2, W) + b)
+                fc3 = tf.nn.relu(tf.matmul(features, W) + b)
                 fc3 = tf.cond(self.is_training, lambda: tf.nn.dropout(fc3, self.keep_prob), lambda: fc3)
 
             with tf.variable_scope("Fully_Connected4_trainable"):
                 W = tf.get_variable("weights", shape=[1024, 10],
-                                    initializer=tf.contrib.layers.xavier_initializer(),
+                                    initializer=tf.random_normal_initializer(stddev=1e-4),
                                     regularizer=self.regularizer)
                 b = tf.get_variable("biases", shape=[10],
                                     initializer=tf.constant_initializer(0.1))
@@ -129,6 +131,42 @@ class AnimalNet_Alex():
             tf.scalar_summary('Accuracy', accuracy)
 
         return accuracy
+
+    def get_confusion_matrix(self, logits, labels, sess, feed_dict):
+        from sklearn.metrics import confusion_matrix
+        with tf.name_scope("Confusion_matrix"):
+            y_pred = tf.argmax(logits, 1)
+            y = tf.argmax(labels, 1)
+
+            y_gt, y_p = sess.run([y_pred, y], feed_dict)
+
+            conf_mat = confusion_matrix(y_gt, y_p)
+
+        return conf_mat
+
+    def get_problematic_photos(self, logits, labels, sess, feed_dict, x, imgs_per_class):
+        import collections
+        y_pred = tf.argmax(logits, 1)
+        y_true = tf.argmax(labels, 1)
+        incorrect_prediction = tf.not_equal(y_pred, y_true)
+
+        incorrect, logits = sess.run([incorrect_prediction, logits], feed_dict)
+
+        incorrectly_classified = np.argmax(logits[incorrect], 1)
+        incorrectly_classified_images = x[incorrect]
+
+        sorted_indices = np.argsort(incorrectly_classified)[::-1]
+
+        incorrectly_classified = incorrectly_classified[sorted_indices]
+        incorrectly_classified_images = incorrectly_classified_images[sorted_indices]
+
+        imgs = collections.defaultdict(list)
+
+        for index, img in enumerate(incorrectly_classified_images):
+            if len(imgs[incorrectly_classified[index]]) < imgs_per_class:
+                imgs[incorrectly_classified[index]].append(img)
+
+        return imgs
 
 
 class AnimalNet_VGG():
@@ -170,7 +208,7 @@ class AnimalNet_VGG():
         return self.is_training.assign(tf.constant(is_training))
 
 
-    def inference(self, x, pool=5):
+    def inference(self, x, features_layer="VGG/pool5:0"):
         """
         Load an existing pretrained VGG-16 model.
         See https://www.cs.toronto.edu/~frossard/post/vgg16/
@@ -204,20 +242,22 @@ class AnimalNet_VGG():
             conv5_3 = self._conv_layer(conv5_2, "conv5_3", vgg_weights)
             pool5 = self._max_pool(conv5_3, "pool5")
 
-            flat_pool5 = tf.contrib.layers.flatten(pool5)
+            features = tf.get_default_graph().get_tensor_by_name(features_layer)
+            # OUR CLASSIFIER
+            flat_pool5 = tf.contrib.layers.flatten(features)
 
-            with tf.variable_scope("Fully_Connected3_trainable"):
+            with tf.variable_scope("Fully_Connected1_trainable"):
                 W = tf.get_variable("weights", shape=[flat_pool5.get_shape()[1], 1024],
-                                    initializer=tf.contrib.layers.xavier_initializer(),
+                                    initializer=tf.random_normal_initializer(stddev=1e-4),
                                     regularizer=self.regularizer)
                 b = tf.get_variable("biases", shape=[1024],
                                     initializer=tf.constant_initializer(0.1))
                 fc1 = tf.nn.relu(tf.matmul(flat_pool5, W) + b)
                 fc1 = tf.cond(self.is_training, lambda: tf.nn.dropout(fc1, self.keep_prob), lambda: fc1)
 
-            with tf.variable_scope("Fully_Connected4_trainable"):
+            with tf.variable_scope("Fully_Connected2_trainable"):
                 W = tf.get_variable("weights", shape=[1024, 10],
-                                    initializer=tf.contrib.layers.xavier_initializer(),
+                                    initializer=tf.random_normal_initializer(stddev=1e-4),
                                     regularizer=self.regularizer)
                 b = tf.get_variable("biases", shape=[10],
                                     initializer=tf.constant_initializer(0.1))
@@ -253,3 +293,39 @@ class AnimalNet_VGG():
             tf.scalar_summary('Accuracy', accuracy)
 
         return accuracy
+
+    def get_confusion_matrix(self, logits, labels, sess, feed_dict):
+        from sklearn.metrics import confusion_matrix
+        with tf.name_scope("Confusion_matrix"):
+            y_pred = tf.argmax(logits, 1)
+            y = tf.argmax(labels, 1)
+
+            y_gt, y_p = sess.run([y_pred, y], feed_dict)
+
+            conf_mat = confusion_matrix(y_gt, y_p)
+
+        return conf_mat
+
+    def get_problematic_photos(self, logits, labels, sess, feed_dict, x, imgs_per_class):
+        import collections
+        y_pred = tf.argmax(logits, 1)
+        y_true = tf.argmax(labels, 1)
+        incorrect_prediction = tf.not_equal(y_pred, y_true)
+
+        incorrect, logits = sess.run([incorrect_prediction, logits], feed_dict)
+
+        incorrectly_classified = np.argmax(logits[incorrect], 1)
+        incorrectly_classified_images = x[incorrect]
+
+        sorted_indices = np.argsort(incorrectly_classified)[::-1]
+
+        incorrectly_classified = incorrectly_classified[sorted_indices]
+        incorrectly_classified_images = incorrectly_classified_images[sorted_indices]
+
+        imgs = collections.defaultdict(list)
+
+        for index, img in enumerate(incorrectly_classified_images):
+            if len(imgs[incorrectly_classified[index]]) < imgs_per_class:
+                imgs[incorrectly_classified[index]].append(img)
+
+        return imgs

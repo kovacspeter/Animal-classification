@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import misc
+
 try:
     import cv2
     CV2_available = True
@@ -27,7 +28,7 @@ class Dataset():
 
         n_classes = len(np.unique(train_labels))
 
-        # Data are just 150MB load them all
+        # Images are just 150MB load them all
         # -----------------------------------
         # Convert to One-Hot-Encoding
         self.train_labels = self._dense_to_one_hot(train_labels, n_classes)
@@ -39,9 +40,9 @@ class Dataset():
         self.test = np.array([np.asarray(self._load_image(DATA_DIR + img), np.float32) for img in self.testimages])
 
         all_data = np.concatenate([self.train, self.val, self.test])
-        mean = np.mean(all_data)
 
         if mean_subtraction:
+            mean = np.mean(all_data)
             self.train -= mean
             self.val -= mean
             self.test -= mean
