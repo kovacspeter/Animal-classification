@@ -57,7 +57,7 @@ def dense_points(im_name, stride=5):
     return grid
 
 
-def compute_hesssian_points(im_name, sigma=1, mag_threshold=10, hes_threshold=5, nms_neighborhood=10):
+def compute_hessian_points(im_name, sigma=1, mag_threshold=10, hes_threshold=5, nms_neighborhood=10):
     im_rgb = imread(im_name)
     
     # convert to grayscale
