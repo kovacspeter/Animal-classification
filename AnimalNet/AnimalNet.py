@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 
-class AnimalNet():
+class AnimalNet_Alex():
     def __init__(self, num_classes, dropout_rate=0.,
                  optimizer=tf.train.AdamOptimizer,
                  regularizer=tf.contrib.layers.l2_regularizer,
@@ -101,6 +101,130 @@ class AnimalNet():
 
                 fc4 = tf.matmul(fc3, W) + b
                 logits = tf.cond(self.is_training, lambda: tf.nn.dropout(fc4, self.keep_prob), lambda: fc4)
+
+        return logits
+
+    def loss(self, logits, labels):
+        with tf.name_scope("Loss"):
+            with tf.name_scope("Cross_entropy_loss"):
+                function_loss = tf.nn.softmax_cross_entropy_with_logits(logits, labels)
+                cross_entropy = tf.reduce_mean(function_loss)
+                tf.scalar_summary("Cross entropy", cross_entropy)
+
+            with tf.name_scope("Regularization_loss"):
+                reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+                reg_loss = tf.reduce_sum(reg_losses)
+                tf.scalar_summary("Regularization loss", reg_loss)
+
+            with tf.name_scope("Total_loss"):
+                loss = cross_entropy + reg_loss
+                tf.scalar_summary("Total loss", loss)
+
+        return loss
+
+    def accuracy(self, logits, labels):
+        with tf.name_scope("Accuracy"):
+            correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
+            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+            tf.scalar_summary('Accuracy', accuracy)
+
+        return accuracy
+
+
+class AnimalNet_VGG():
+
+    def __init__(self, num_classes, dropout_rate=0.,
+                 optimizer=tf.train.AdamOptimizer,
+                 regularizer=tf.contrib.layers.l2_regularizer,
+                 regularization_scale=0.,
+                 learning_rate=3e-4,
+                 is_training=tf.Variable(True)):
+
+        # Model hyperparameters
+        self.num_classes = num_classes
+        self.keep_prob = 1 - dropout_rate
+        self.optimizer = optimizer(learning_rate=learning_rate)
+        self.regularizer = regularizer(scale=regularization_scale)
+        self.is_training = is_training
+        self.VGG_FILE = './vgg16_weights.npz'
+
+
+    def load_weights(self, weight_file):
+        weights = np.load(weight_file)
+        keys = sorted(weights.keys())
+        return weights, keys
+
+    def _max_pool(self, bottom, name):
+        return tf.nn.max_pool(bottom, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID', name=name)
+
+    def _conv_layer(self, bottom, name, net_data, stride=[1, 1, 1, 1]):
+        with tf.variable_scope(name):
+            filt = tf.constant(net_data[name + '_W'], name="filter")
+            conv_biases = tf.constant(net_data[name + '_b'], name="biases")
+            conv = tf.nn.conv2d(bottom, filt, stride, padding='SAME')
+            bias = tf.nn.bias_add(conv, conv_biases)
+            relu = tf.nn.relu(bias)
+            return relu
+
+    def _set_training_op(self, is_training):
+        return self.is_training.assign(tf.constant(is_training))
+
+
+    def inference(self, x, pool=5):
+        """
+        Load an existing pretrained VGG-16 model.
+        See https://www.cs.toronto.edu/~frossard/post/vgg16/
+
+        Args:
+            input:         4D Tensor, Input data
+
+        Returns:
+            pool5: 4D Tensor, last pooling layer
+        """
+
+        with tf.variable_scope("VGG"):
+            vgg_weights, vgg_keys = self.load_weights(self.VGG_FILE)
+
+            conv1_1 = self._conv_layer(x, "conv1_1", vgg_weights)
+            conv1_2 = self._conv_layer(conv1_1, "conv1_2", vgg_weights)
+            pool1 = self._max_pool(conv1_2, "pool1")
+            conv2_1 = self._conv_layer(pool1, "conv2_1", vgg_weights)
+            conv2_2 = self._conv_layer(conv2_1, "conv2_2", vgg_weights)
+            pool2 = self._max_pool(conv2_2, "pool2")
+            conv3_1 = self._conv_layer(pool2, "conv3_1", vgg_weights)
+            conv3_2 = self._conv_layer(conv3_1, "conv3_2", vgg_weights)
+            conv3_3 = self._conv_layer(conv3_2, "conv3_3", vgg_weights)
+            pool3 = self._max_pool(conv3_3, "pool3")
+            conv4_1 = self._conv_layer(pool3, "conv4_1", vgg_weights)
+            conv4_2 = self._conv_layer(conv4_1, "conv4_2", vgg_weights)
+            conv4_3 = self._conv_layer(conv4_2, "conv4_3", vgg_weights)
+            pool4 = self._max_pool(conv4_3, "pool4")
+            conv5_1 = self._conv_layer(pool4, "conv5_1", vgg_weights)
+            conv5_2 = self._conv_layer(conv5_1, "conv5_2", vgg_weights)
+            conv5_3 = self._conv_layer(conv5_2, "conv5_3", vgg_weights)
+            pool5 = self._max_pool(conv5_3, "pool5")
+
+            flat_pool5 = tf.contrib.layers.flatten(pool5)
+
+            with tf.variable_scope("Fully_Connected3_trainable"):
+                W = tf.get_variable("weights", shape=[flat_pool5.get_shape()[1], 1024],
+                                    initializer=tf.contrib.layers.xavier_initializer(),
+                                    regularizer=self.regularizer)
+                b = tf.get_variable("biases", shape=[1024],
+                                    initializer=tf.constant_initializer(0.1))
+                fc1 = tf.nn.relu(tf.matmul(flat_pool5, W) + b)
+                fc1 = tf.cond(self.is_training, lambda: tf.nn.dropout(fc1, self.keep_prob), lambda: fc1)
+
+            with tf.variable_scope("Fully_Connected4_trainable"):
+                W = tf.get_variable("weights", shape=[1024, 10],
+                                    initializer=tf.contrib.layers.xavier_initializer(),
+                                    regularizer=self.regularizer)
+                b = tf.get_variable("biases", shape=[10],
+                                    initializer=tf.constant_initializer(0.1))
+
+                fc2 = tf.matmul(fc1, W) + b
+                logits = tf.cond(self.is_training, lambda: tf.nn.dropout(fc2, self.keep_prob), lambda: fc2)
+
 
         return logits
 

@@ -11,7 +11,7 @@ DATA_DIR = '../data/'
 
 class Dataset():
 
-    def __init__(self, rescale_imgs=False, img_shape=None, submission=False):
+    def __init__(self, rescale_imgs=False, img_shape=None, submission=False, mean_subtraction=True):
         # If you want to rescale images by default
         self.rescale_imgs = rescale_imgs
         self.img_shape = img_shape
@@ -41,9 +41,10 @@ class Dataset():
         all_data = np.concatenate([self.train, self.val, self.test])
         mean = np.mean(all_data)
 
-        self.train -= mean
-        self.val -= mean
-        self.test -= mean
+        if mean_subtraction:
+            self.train -= mean
+            self.val -= mean
+            self.test -= mean
 
         if submission:
             self.train = np.concatenate([self.train, self.val])
