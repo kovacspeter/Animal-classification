@@ -55,10 +55,11 @@ def get_sift_features_from_images(image_paths, name):
 def create_clusters(features, use_mini_batch=True):
     # create clusters from feature set
     # HYPER PARAMETERS HERE
+    n_clusters=200
     logger.info("starting k-means clustering...")
     start = time.time()
     if use_mini_batch:
-        mini_batch_k_means = MiniBatchKMeans(n_clusters=200, max_iter=3, verbose=True)  # HYPER
+        mini_batch_k_means = MiniBatchKMeans(n_clusters=n_clusters, max_iter=3, verbose=True)  # HYPER
         mini_batch_k_means.fit(features)
         centroids = mini_batch_k_means.cluster_centers_
     else:
@@ -152,15 +153,16 @@ if __name__ == "__main__":
         if False:
             train_features = np.load('train_features.npy')
         else:
-            train_features = get_sift_features_from_images(train_images, 'train')
+            train_features = get_sift_features_from_images(train_images[:10], 'train')
         create_clusters(train_features)
 
     # create histograms
-    if True:
+    if False:
         clusters = np.load('clusters_200.npy')
         create_histograms(clusters, train_images, val_images)
 
     # classify images
-    predictions = classify(np.load('train_histogram.npy'), train_labels, np.load('val_histogram.npy'), val_labels)
-    print("accuracy: {}".format(compute_accuracy(predictions, val_labels)))
+    if False:
+        predictions = classify(np.load('train_histogram.npy'), train_labels, np.load('val_histogram.npy'), val_labels)
+        print("accuracy: {}".format(compute_accuracy(predictions, val_labels)))
     logger.debug("DONE")
