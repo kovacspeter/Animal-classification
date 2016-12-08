@@ -28,7 +28,7 @@ def create_code_book(features):
         k_means.fit(features)
         code_book = k_means.cluster_centers_
     logger.info("clustering done in {} sec".format(time.time()-start))
-    logger.info("saving code book...")
+    logger.debug("saving code book...")
     np.save('code_book.npy', code_book)
     return code_book
 
@@ -82,23 +82,22 @@ def k_nearest_neighbors(train_histograms, train_labels, val_histograms):
 def classify(train_histograms, train_labels, val_histograms, val_labels):
     predictions = k_nearest_neighbors(train_histograms, train_labels, val_histograms)
     for idx, prediction in enumerate(predictions):
-        logger.info("val label: {}, prediction: {}".format(val_labels[idx], prediction))
+        logger.debug("val label: {}, prediction: {}".format(val_labels[idx], prediction))
     return predictions
 
 
 def compute_accuracy(predictions, truth):
     return (np.sum(predictions == truth)) / len(truth)
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+def run_classification():
     train_images = get_train_images()
     train_labels = get_train_labels()
     val_images = get_val_images()
     val_labels = get_val_labels()
 
     # extract features for all images
-    if True:
+    if False:
         train_features_dict = get_sift_features_dict_from_images(train_images, 'train')
         val_features_dict = get_sift_features_dict_from_images(val_images, 'val')
     else:
@@ -122,5 +121,15 @@ if __name__ == "__main__":
 
     # classify images
     predictions = classify(train_histograms, train_labels, val_histograms, val_labels)
-    print("accuracy: {}".format(compute_accuracy(predictions, val_labels)))
-    logger.debug("DONE")
+    logger.info("accuracy: {}".format(compute_accuracy(predictions, val_labels)))
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(filename)s - %(levelname)s - %(message)s')
+
+    # run experiment
+    for cluster_size in [50, 100, 150]:
+        CODE_BOOK_KMEANS_CLUSTERS = cluster_size
+        logger.info("run classification with codebook cluster size {}".format(CODE_BOOK_KMEANS_CLUSTERS))
+        run_classification()
+    logger.info("DONE")

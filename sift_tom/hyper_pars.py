@@ -1,5 +1,5 @@
 # no of cores to use
-N_JOBS = 2
+N_JOBS = 1
 
 # sift point types
 SIFT_USE_DENSE_POINTS = True
