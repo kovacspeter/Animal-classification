@@ -230,12 +230,12 @@ p = []
 t = []
 print 'Actual'.rjust(10)+'Predicted'.rjust(20)+'\n-----------------------------------'
 for s in names:
-    for i in xrange(5,10):
+    for i in xrange(1,21):
         h = make_histogram_from_image(img_dir+s+"/"+s+"_"+str(i).zfill(4)+'.jpg',cl)
         h = np.reshape(h,(1,len(h)))
         #p.append(np.int_(nn_classifier(h, X, y)[0]))  #NN=1
         #p.append(np.int_(weighted_nn(h, X, y)[0]))  #WEIGHTED NN
-        p.append(np.int_(knn(h, X, y, 3)[0]))  #KNN
+        p.append(np.int_(knn(h, X, y, 10)[0]))  #KNN
         t.append(names.index(s))
         print s.rjust(10)+names[p[-1]].rjust(20)
 print '\nOverall Accuracy:',compute_accuracy(np.array(p),np.array(t))
