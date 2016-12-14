@@ -7,6 +7,7 @@ Project for Applied Machine Learning at University of Amsterdam.
 2. Download the [bvlc_alexnet.npy](http://www.cs.toronto.edu/~guerzhoy/tf_alexnet/bvlc_alexnet.npy), or download      manually from the toronto computer science [website](http://www.cs.toronto.edu/~guerzhoy/tf_alexnet/)
 3. Run training `python run.py`
 
+Data augmentation comes from this [github project](https://github.com/aleju/imgaug)!
 
 # TODO
 1. Data Augmentation
