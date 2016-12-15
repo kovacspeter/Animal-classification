@@ -3,7 +3,7 @@ N_JOBS = 1
 
 # select features to combine
 USE_SIFT = True
-USE_RGB = True
+USE_RGB = False
 
 # sift point types
 SIFT_USE_DENSE_POINTS = True
