@@ -16,16 +16,23 @@ logger = logging.getLogger(__file__)
 data_path = '../data/'
 
 
-def get_features_dict_from_images(image_paths, name):
+def get_sift_points(image_paths, set_name):
+    # get sift points of interest - set flag to reuse previous points
+    points_dict = OrderedDict()
+    for idx, image_path in enumerate(image_paths):
+        logger.debug('get points ({}/{})'.format(idx, len(image_paths)))
+        points_dict[idx] = get_sift_points_from_image(image_path)
+
+    pickle.dump(points_dict, open('data/{}_points.dat'.format(set_name), 'wb'))
+    return points_dict
+
+
+def get_features_dict_from_images(image_paths, points, set_name):
     # collect and combine features from all images, store in dict with image index as key
     start = time.time()
     feature_dict = OrderedDict()  # necessary as we need to maintain order when using dict.values() unpacking
     for idx, image_path in enumerate(image_paths):
         logger.debug('process image ({}/{})'.format(idx, len(image_paths)))
-
-        # find sift points of interest
-        points = get_sift_points_from_image(image_path)
-
         # extract features on sift points
         assert(hyper_pars.USE_RGB or hyper_pars.USE_SIFT)
         combined_features = []
@@ -39,7 +46,7 @@ def get_features_dict_from_images(image_paths, name):
 
     logger.info("feature collection done in {} sec".format(time.time()-start))
     logger.info("saving features...")
-    pickle.dump(feature_dict, open('data/{}_features.dat'.format(name), 'wb'))
+    pickle.dump(feature_dict, open('data/{}_features.dat'.format(set_name), 'wb'))
     return feature_dict
 
 
@@ -129,10 +136,18 @@ def run_classification():
     val_images = get_val_images()
     val_labels = get_val_labels()
 
+    # get sift points
+    if True:
+        train_points = get_sift_points(train_images, 'train')
+        val_points = get_sift_points(val_images, 'val')
+    else:
+        train_points = pickle.load(open('data/train_points.dat', 'rb'))
+        val_points = pickle.load(open('data/val_points.dat', 'rb'))
+
     # extract features for all images
     if True:
-        train_features_dict = get_features_dict_from_images(train_images, 'train')
-        val_features_dict = get_features_dict_from_images(val_images, 'val')
+        train_features_dict = get_features_dict_from_images(train_images, train_points, 'train')
+        val_features_dict = get_features_dict_from_images(val_images, val_points, 'val')
     else:
         train_features_dict = pickle.load(open('data/train_features.dat', 'rb'))
         val_features_dict = pickle.load(open('data/val_features.dat', 'rb'))
