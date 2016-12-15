@@ -21,6 +21,7 @@ LEARNING_RATE_DEFAULT = 1e-4
 SUBMISSION_DEFAULT = "False"
 MEAN_SUBTRACTION_DEFAULT = "True"
 AUGMENTATION_DEFAULT = "False"
+FEATURE_LAYER_DEFAULT = ''
 
 def train():
 
@@ -32,15 +33,17 @@ def train():
     tf.set_random_seed(42)
     np.random.seed(42)
 
+    IMG_SIZE = 227
+
     dataset = Dataset(rescale_imgs=True,
-                      img_shape=(227, 227),
+                      img_shape=(IMG_SIZE, IMG_SIZE),
                       submission=submission,
                       mean_subtraction=mean_subtraction)
     if not submission:
         val_images, val_labels = dataset.val, dataset.val_labels
 
     with tf.variable_scope("Input"):
-        input = tf.placeholder(tf.float32, [None, 227, 227, 3], name='input')
+        input = tf.placeholder(tf.float32, [None, IMG_SIZE, IMG_SIZE, 3], name='input')
         labels = tf.placeholder(tf.float32, shape=(None, 10), name='labels')
 
     if FLAGS.architecture == "alexnet":
@@ -57,11 +60,18 @@ def train():
     stop_training_op = net._set_training_op(False)
     start_training_op = net._set_training_op(True)
 
-    logits = net.inference(input)
+    logits = net.inference(input, FLAGS.feature_layer)
     loss_op = net.loss(logits, labels)
     acc_op = net.accuracy(logits, labels)
 
+    summary = tf.merge_all_summaries()
+
     with tf.Session() as sess:
+
+        if not tf.gfile.Exists(FLAGS.log_dir):
+            tf.gfile.MakeDirs(FLAGS.log_dir)
+        train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/train', sess.graph)
+        test_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/test', sess.graph)
 
         # Training operation
         train_op = tf.train.AdamOptimizer(1e-4).minimize(loss_op)
@@ -82,7 +92,10 @@ def train():
                                labels: train_labels}
 
             if (epoch+1) % FLAGS.print_freq == 0:
-                _, loss, acc = sess.run([stop_training_op, loss_op, acc_op], train_feed_dict)
+                _, loss, acc, summary_str = sess.run([stop_training_op, loss_op, acc_op, summary], train_feed_dict)
+                train_writer.add_summary(summary_str, epoch)
+                train_writer.flush()
+
                 print("********** Step :", epoch, "of", FLAGS.max_steps, "**********")
 
                 print("Train set accuracy is: ", acc)
@@ -91,8 +104,10 @@ def train():
 
                 if not submission:
 
-                    loss, acc = sess.run([loss_op, acc_op], val_feed_dict)
+                    loss, acc, summary_str = sess.run([loss_op, acc_op, summary], val_feed_dict)
 
+                    test_writer.add_summary(summary_str, epoch)
+                    test_writer.flush()
                     print("Validation set accuracy is: ", acc)
                     print("Validation set loss is: ", loss)
                     print("--------------------------------------------------")
@@ -100,7 +115,6 @@ def train():
             else:
                 sess.run([start_training_op, train_op], train_feed_dict)
 
-            # TODO summaries
             # TODO model saving/loading
 
         if not submission:
@@ -218,9 +232,16 @@ if __name__ == '__main__':
                         help='Architecture of network can be vgg or alexnet')
     parser.add_argument('--submission_filename', type=str, default=SUBMISSION_FILENAME_DEFAULT,
                         help='Name of the file where submissions will be written')
-    # parser.add_argument('--feature_layer', type=str, default=FEATURE_LAYER_DEFAULT,
-    #                     help='Layer tensor name on which we will train our classifier.')
+    parser.add_argument('--feature_layer', type=str, default=FEATURE_LAYER_DEFAULT,
+                        help='Layer tensor name on which we will train our classifier.')
 
     FLAGS, unparsed = parser.parse_known_args()
+
+
+    if FLAGS.feature_layer == FEATURE_LAYER_DEFAULT:
+        if FLAGS.architecture == 'vgg':
+            FLAGS.feature_layer = "VGG/pool5:0"
+        else:
+            FLAGS.feature_layer = "AlexNet/Fully_Connected3/Relu:0"
 
     train()

@@ -56,7 +56,7 @@ class AnimalNet_Alex():
         return self.is_training.assign(tf.constant(is_training))
 
 
-    def inference(self, x, features_layer="AlexNet/Fully_Connected2/Relu:0"):
+    def inference(self, x, features_layer="AlexNet/Fully_Connected3/Relu:0"):
 
         net_data = self._load_weights('bvlc_alexnet.npy')
 
@@ -71,8 +71,9 @@ class AnimalNet_Alex():
             conv5 = self._conv_layer(conv4, "conv5", net_data, group=2)
             pool5 = self._max_pool(conv5, "pool5")
 
+            flat_pool5 = tf.contrib.layers.flatten(pool5)
+
             with tf.variable_scope("Fully_Connected1"):
-                flat_pool5 = tf.contrib.layers.flatten(pool5)
                 W = tf.constant(net_data['fc6'][0], name="weights")
                 b = tf.constant(net_data['fc6'][1], name="biases")
 
@@ -83,10 +84,15 @@ class AnimalNet_Alex():
                 b = tf.constant(net_data['fc7'][1], name="biases")
                 fc2 = tf.nn.relu(tf.matmul(fc1, W) + b)
 
+            with tf.variable_scope("Fully_Connected3"):
+                W = tf.constant(net_data['fc8'][0], name="weights")
+                b = tf.constant(net_data['fc8'][1], name="biases")
+                fc3 = tf.nn.relu(tf.matmul(fc2, W) + b)
+
             features = tf.get_default_graph().get_tensor_by_name(features_layer)
             # OUR CLASSIFIER
-            with tf.variable_scope("Fully_Connected3_trainable"):
-                W = tf.get_variable("weights", shape=[4096, 1024],
+            with tf.variable_scope("Fully_Connected4_trainable"):
+                W = tf.get_variable("weights", shape=[features.get_shape()[1], 1024],
                                     initializer=tf.random_normal_initializer(stddev=1e-4),
                                     regularizer=self.regularizer)
                 b = tf.get_variable("biases", shape=[1024],
@@ -94,7 +100,7 @@ class AnimalNet_Alex():
                 fc3 = tf.nn.relu(tf.matmul(features, W) + b)
                 fc3 = tf.cond(self.is_training, lambda: tf.nn.dropout(fc3, self.keep_prob), lambda: fc3)
 
-            with tf.variable_scope("Fully_Connected4_trainable"):
+            with tf.variable_scope("Fully_Connected5_trainable"):
                 W = tf.get_variable("weights", shape=[1024, 10],
                                     initializer=tf.random_normal_initializer(stddev=1e-4),
                                     regularizer=self.regularizer)
