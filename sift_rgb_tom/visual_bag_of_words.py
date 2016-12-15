@@ -38,9 +38,9 @@ def get_features_dict_from_images(image_paths, points, set_name):
         combined_features = []
 
         if hyper_pars.USE_SIFT:
-            combined_features.append(get_sift_features_from_image(image_path, points))
+            combined_features.append(get_sift_features_from_image(image_path, points[idx]))
         if hyper_pars.USE_RGB:
-            combined_features.append(get_rgb_features_from_image(image_path, points))
+            combined_features.append(get_rgb_features_from_image(image_path, points[idx]))
         combined_features = np.hstack(combined_features)
         feature_dict[idx] = combined_features
 
@@ -137,7 +137,7 @@ def run_classification():
     val_labels = get_val_labels()
 
     # get sift points
-    if True:
+    if False:
         train_points = get_sift_points(train_images, 'train')
         val_points = get_sift_points(val_images, 'val')
     else:
