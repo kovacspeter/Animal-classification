@@ -10,8 +10,8 @@ import itertools
 
 # Directory for tensorflow logs
 LOG_DIR_DEFAULT = './logs/'
-MAX_STEPS_DEFAULT = 500
-BATCH_SIZE_DEFAULT = 50
+MAX_STEPS_DEFAULT = 1000
+BATCH_SIZE_DEFAULT = 48
 PRINT_FREQ_DEFAULT = 20
 DROPOUT_DEFAULT = 0.
 L2_REG_DEFAULT = 0.
@@ -32,8 +32,10 @@ def train():
     # For reproducible research :)
     tf.set_random_seed(42)
     np.random.seed(42)
-
-    IMG_SIZE = 227
+    if FLAGS.architecture == "alexnet":
+        IMG_SIZE = 227
+    else:
+        IMG_SIZE = 224
 
     dataset = Dataset(rescale_imgs=True,
                       img_shape=(IMG_SIZE, IMG_SIZE),
@@ -45,102 +47,105 @@ def train():
     with tf.variable_scope("Input"):
         input = tf.placeholder(tf.float32, [None, IMG_SIZE, IMG_SIZE, 3], name='input')
         labels = tf.placeholder(tf.float32, shape=(None, 10), name='labels')
+        e = tf.placeholder(tf.float32, name='epoch')
 
     if FLAGS.architecture == "alexnet":
         net = AnimalNet_Alex(num_classes=10,
                              dropout_rate=FLAGS.dropout,
                              regularization_scale=FLAGS.l2_reg,
-                             learning_rate=FLAGS.learning_rate)
+                             refine_after=FLAGS.refine_after)
     else:
         net = AnimalNet_VGG(num_classes=10,
                             dropout_rate=FLAGS.dropout,
                             regularization_scale=FLAGS.l2_reg,
-                            learning_rate=FLAGS.learning_rate)
+                            refine_after=FLAGS.refine_after)
 
     stop_training_op = net._set_training_op(False)
     start_training_op = net._set_training_op(True)
 
-    logits = net.inference(input, FLAGS.feature_layer)
+    logits = net.inference(input, e, FLAGS.feature_layer)
     loss_op = net.loss(logits, labels)
     acc_op = net.accuracy(logits, labels)
 
+    # Training operation
+    train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss_op)
+
     summary = tf.merge_all_summaries()
 
-    with tf.Session() as sess:
+    if not tf.gfile.Exists(FLAGS.log_dir):
+        tf.gfile.MakeDirs(FLAGS.log_dir)
 
-        if not tf.gfile.Exists(FLAGS.log_dir):
-            tf.gfile.MakeDirs(FLAGS.log_dir)
-        train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/train', sess.graph)
-        test_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/test', sess.graph)
+    sess = tf.Session()
 
-        # Training operation
-        train_op = tf.train.AdamOptimizer(1e-4).minimize(loss_op)
+    # Initialize variables
+    init_op = tf.initialize_all_variables()
+    sess.run(init_op)
+    sess.run(net.assign_ops)
 
-        # Summary
-        # summary_op = tf.merge_all_summaries()
+    train_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/train')
+    test_writer = tf.train.SummaryWriter(FLAGS.log_dir + '/test')
 
-        # Initialize variables
-        init_op = tf.initialize_all_variables()
-        sess.run(init_op)
 
-        val_feed_dict = {input: val_images,
-                         labels: val_labels}
+    for epoch in range(FLAGS.max_steps):
+        train_images, train_labels = dataset.get_batch(FLAGS.batch_size)
+        train_feed_dict = {input: train_images,
+                           labels: train_labels,
+                           e: epoch}
 
-        for epoch in range(FLAGS.max_steps):
-            train_images, train_labels = dataset.get_batch(FLAGS.batch_size)
-            train_feed_dict = {input: train_images,
-                               labels: train_labels}
+        if (epoch+1) % FLAGS.print_freq == 0:
+            _, loss, acc, summary_str = sess.run([stop_training_op, loss_op, acc_op, summary], train_feed_dict)
+            train_writer.add_summary(summary_str, epoch)
+            train_writer.flush()
 
-            if (epoch+1) % FLAGS.print_freq == 0:
-                _, loss, acc, summary_str = sess.run([stop_training_op, loss_op, acc_op, summary], train_feed_dict)
-                train_writer.add_summary(summary_str, epoch)
-                train_writer.flush()
+            print("********** Step :", epoch, "of", FLAGS.max_steps, "**********")
 
-                print("********** Step :", epoch, "of", FLAGS.max_steps, "**********")
+            print("Train set accuracy is: ", acc)
+            print("Train set loss is: ", loss)
+            print("--------------------------------------------------")
 
-                print("Train set accuracy is: ", acc)
-                print("Train set loss is: ", loss)
+            if not submission:
+
+                val_feed_dict = {input: val_images,
+                                 labels: val_labels,
+                                 e: epoch}
+
+                loss, acc, summary_str = sess.run([loss_op, acc_op, summary], val_feed_dict)
+
+                test_writer.add_summary(summary_str, epoch)
+                test_writer.flush()
+                print("Validation set accuracy is: ", acc)
+                print("Validation set loss is: ", loss)
                 print("--------------------------------------------------")
 
-                if not submission:
+        else:
+            sess.run([start_training_op, train_op], train_feed_dict)
 
-                    loss, acc, summary_str = sess.run([loss_op, acc_op, summary], val_feed_dict)
+        # TODO model saving/loading
 
-                    test_writer.add_summary(summary_str, epoch)
-                    test_writer.flush()
-                    print("Validation set accuracy is: ", acc)
-                    print("Validation set loss is: ", loss)
-                    print("--------------------------------------------------")
+    if not submission:
+        cnf_matrix = net.get_confusion_matrix(logits, labels, sess, val_feed_dict)
+        plot_confusion_matrix(cnf_matrix, title='Confusion matrix, without normalization')
 
-            else:
-                sess.run([start_training_op, train_op], train_feed_dict)
-
-            # TODO model saving/loading
-
-        if not submission:
-            cnf_matrix = net.get_confusion_matrix(logits, labels, sess, val_feed_dict)
-            plot_confusion_matrix(cnf_matrix, title='Confusion matrix, without normalization')
-
-            imgs = net.get_problematic_photos(logits, labels, sess, val_feed_dict, val_images, 5)
-            plot_imgs(imgs)
+        imgs = net.get_problematic_photos(logits, labels, sess, val_feed_dict, val_images, 5)
+        plot_imgs(imgs)
 
 
-        #We save your predictions to file
-        if submission:
-            test_p_file = open(FLAGS.submission_filename,'w')
-            test_p_file.write('ImageName,Prediction\n')
-            # VGG problem -> not enough memory
-            # we need to split test data to batches
-            predictions = []
-            for i in range(5):
-                test_feed_dict = {input: dataset.test[i*100:(i+1)*100]}
-                predictions.append(sess.run(logits, test_feed_dict))
-            predictions = np.concatenate(predictions)
-            test_labels = np.argmax(predictions, 1)
+    #We save your predictions to file
+    if submission:
+        test_p_file = open(FLAGS.submission_filename,'w')
+        test_p_file.write('ImageName,Prediction\n')
+        # VGG problem -> not enough memory
+        # we need to split test data to batches
+        predictions = []
+        for i in range(5):
+            test_feed_dict = {input: dataset.test[i*100:(i+1)*100]}
+            predictions.append(sess.run(logits, test_feed_dict))
+        predictions = np.concatenate(predictions)
+        test_labels = np.argmax(predictions, 1)
 
-            for i, image in enumerate(dataset.testimages):
-                test_p_file.write(image+','+str(test_labels[i])+'\n')
-            test_p_file.close()
+        for i, image in enumerate(dataset.testimages):
+            test_p_file.write(image+','+str(test_labels[i])+'\n')
+        test_p_file.close()
 
 
 def plot_confusion_matrix(cm, normalize=False, title='Confusion matrix', cmap=plt.cm.Blues):
@@ -204,6 +209,18 @@ def plot_imgs(imgs):
 
   plt.savefig("./hard_images_" + FLAGS.architecture)
 
+def main(_):
+    if FLAGS.feature_layer == FEATURE_LAYER_DEFAULT:
+        if FLAGS.architecture == 'vgg':
+            FLAGS.feature_layer = "VGG/pool5:0"
+        else:
+            FLAGS.feature_layer = "AlexNet/fc8/Relu:0"
+
+    for key, value in vars(FLAGS).items():
+        print(key + ' : ' + str(value))
+
+    train()
+
 if __name__ == '__main__':
     # Command line arguments
     parser = argparse.ArgumentParser()
@@ -234,14 +251,9 @@ if __name__ == '__main__':
                         help='Name of the file where submissions will be written')
     parser.add_argument('--feature_layer', type=str, default=FEATURE_LAYER_DEFAULT,
                         help='Layer tensor name on which we will train our classifier.')
+    parser.add_argument('--refine_after', type=int, default=MAX_STEPS_DEFAULT,
+                        help='After how many iteration we want to refine network (default: use only as feature extractor)')
 
     FLAGS, unparsed = parser.parse_known_args()
 
-
-    if FLAGS.feature_layer == FEATURE_LAYER_DEFAULT:
-        if FLAGS.architecture == 'vgg':
-            FLAGS.feature_layer = "VGG/pool5:0"
-        else:
-            FLAGS.feature_layer = "AlexNet/Fully_Connected3/Relu:0"
-
-    train()
+    tf.app.run()
