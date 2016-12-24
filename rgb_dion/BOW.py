@@ -6,82 +6,78 @@ from sklearn.feature_extraction.image import extract_patches_2d
 from sklearn.cluster import k_means
 
 
-
-"""Define training image locations"""
-img_dir = "data/dataset/trainset/"
-sub_dirs = [img_dir+ d for d in os.listdir(img_dir) if not d.startswith('.')]
+""" Define training image locations"""
+img_dir = "../data/dataset/trainset/"
+sub_dirs = [img_dir + d for d in os.listdir(img_dir) if not d.startswith('.')]
 images = [d + '/' + f for d in sub_dirs for f in os.listdir(d) 
-            if not f.startswith('.')]
+          if not f.startswith('.')]
 labels = [f for f in os.listdir(img_dir) if not f.startswith('.')]
 
 
-
-#Cluster a set of features into k clusters.
+# Cluster a set of features into k clusters.
 def cluster_data(features, k, nr_iter=25):
     centroids = k_means(features, n_clusters=k, max_iter=nr_iter)[0]
-
     return centroids
 
 
-#This function takes as input an image and how many patches to return
-def patch_vectors(img,patch_nr,patch_size=(3,3)):
-    #We define some useful values
-    patch_h,patch_w = patch_size
+# This function takes as input an image and how many patches to return
+def patch_vectors(img, patch_nr, patch_size=(3, 3)):
+    # We define some useful values
+    patch_h, patch_w = patch_size
     
-    #We define the output array with the expected size
-    output = np.zeros((patch_nr,patch_h*patch_w*3))
+    # We define the output array with the expected size
+    output = np.zeros((patch_nr, patch_h*patch_w*3))
     
-    patches = extract_patches_2d(img,patch_size,patch_nr)
-    output[:,:] = np.reshape(patches,(patch_nr,np.prod(np.shape(patches)[1:])))[:,:]
+    patches = extract_patches_2d(img, patch_size, patch_nr)
+    output[:, :] = np.reshape(patches, (patch_nr, np.prod(np.shape(patches)[1:])))[:, :]
     
     return output
 
 
-#This function will take a list of image filenames and the desired number of clusters,
-#Extract patches from each image using the patch_vectors function, then perform clustering
-#On the patches from all the input images. These clusters will be returned as a (k x N)
-#array, where k is the number of clusters, and N is the length of the vectors.
-def patch_clusters(image_filenames, nr_clusters, nr_patches_per_img=200, patch_size=(3,3)):
+# This function will take a list of image filenames and the desired number of clusters,
+# Extract patches from each image using the patch_vectors function, then perform clustering
+# On the patches from all the input images. These clusters will be returned as a (k x N)
+# array, where k is the number of clusters, and N is the length of the vectors.
+def patch_clusters(image_filenames, nr_clusters, nr_patches_per_img=200, patch_size=(3, 3)):
     
-    #Again, we define helpful values:
-    patch_h,patch_w = patch_size
+    # Again, we define helpful values:
+    patch_h, patch_w = patch_size
     
-    #We also define a helpful intermediary array for storing all the
-    #patches from the input images.
-    patches = np.zeros((nr_patches_per_img*len(image_filenames),np.prod(patch_size)*3))
+    # We also define a helpful intermediary array for storing all the
+    # patches from the input images.
+    patches = np.zeros((nr_patches_per_img*len(image_filenames), np.prod(patch_size)*3))
     
-    #For each image, we fill in the patches array with N patch vectors
-    for i,each_filename in enumerate(image_filenames):
+    # For each image, we fill in the patches array with N patch vectors
+    for i, each_filename in enumerate(image_filenames):
         img = scipy.misc.imread(each_filename)
         idx = i*nr_patches_per_img
-        patches[idx:idx+nr_patches_per_img,...] = patch_vectors(img,nr_patches_per_img,patch_size)
+        patches[idx:idx+nr_patches_per_img, ...] = patch_vectors(img, nr_patches_per_img, patch_size)
 
-    cluster_output = cluster_data(patches,nr_clusters)
+    cluster_output = cluster_data(patches, nr_clusters)
 
     return cluster_output
 
 
-#We will cluster patches extracted from the first 5 images in each Desert/Boat/forest series
+# We will cluster patches extracted from the first 5 images in each Desert/Boat/forest series
 image_filenames = images
 
-#We set the number of clusters to 32.
+# We set the number of clusters to 32.
 cl = patch_clusters(image_filenames,32)
 
 
-
-#A function to generate histograms for an image
-def make_histogram_from_image(imagepath,cl):
+# A function to generate histograms for an image
+def make_histogram_from_image(imagepath, cl):
     img = scipy.misc.imread(imagepath)
-    test_patches = extract_patches_2d(img,(3,3),max_patches=500)
-    test_patches = np.reshape(test_patches,(np.shape(test_patches)[0],np.prod(np.shape(test_patches)[1:])))
+    test_patches = extract_patches_2d(img, (3, 3), max_patches=500)
+    test_patches = np.reshape(test_patches, (np.shape(test_patches)[0], np.prod(np.shape(test_patches)[1:])))
     
-    return create_histogram(test_patches,cl)
+    return create_histogram(test_patches, cl)
 
 
-#Create a bag-of-words histogram from a set of features given the clusters.
+# Create a bag-of-words histogram from a set of features given the clusters.
 def create_histogram(samples, clusters):
-    assignments = cluster_assignment(samples,clusters)
-    histogram   = np.zeros(clusters.shape[0], dtype=np.float)
+    assignments = cluster_assignment(samples, clusters)
+    histogram = np.zeros(clusters.shape[0], dtype=np.float)
     
     # Go over all the assignments and place them in the correct histogram bin.
     for i in range(len(assignments)):
@@ -94,12 +90,12 @@ def create_histogram(samples, clusters):
     return histogram
 
 
-#For each sample, find the nearest cluster.
+# For each sample, find the nearest cluster.
 def cluster_assignment(samples, clusters):
     nr_samples = samples.shape[0]
     nr_clusters = clusters.shape[0]
     
-    assignments  = np.zeros(nr_samples, dtype=int)
+    assignments = np.zeros(nr_samples, dtype=int)
     
     # For each data sample, compute the distance to each cluster.
     # Assign each sample to the cluster with the smallest distance.
@@ -111,12 +107,11 @@ def cluster_assignment(samples, clusters):
     return assignments
 
 
-#Compute the Euclidean distance between 2 features.
+# Compute the Euclidean distance between 2 features.
 def euclidean_distance(x, y):
     assert(len(x) == len(y))
     
     d = 0.0
-    
     nr_dimensions = len(x)
     
     # Compute the distance value.
@@ -126,7 +121,7 @@ def euclidean_distance(x, y):
     return np.sqrt(d)
 
 
-def distances(a,X,distance_fn=euclidean_distance):
+def distances(a, X, distance_fn=euclidean_distance):
     dists = np.zeros(X.shape[0])
     
     for i in range(X.shape[0]):
@@ -135,21 +130,16 @@ def distances(a,X,distance_fn=euclidean_distance):
     return dists
 
 
-
-#Put all histograms of a certain class in a dictionary:
-hs = dict((label,[]) for label in labels)
+# Put all histograms of a certain class in a dictionary:
+hs = dict((label, []) for label in labels)
 hsk = hs.keys()
 
-#For each image from 1 t/m 5
+# For each image from 1 t/m 5
 for i in xrange(1, 6):
-    #For each series label
-    for j,s in enumerate(hsk,start=1):
-        h = make_histogram_from_image(img_dir+s+"/"+s+"_"+str(i).zfill(4)+'.jpg',cl)
+    # For each series label
+    for j, s in enumerate(hsk, start=1):
+        h = make_histogram_from_image(img_dir+s+"/"+s+"_"+str(i).zfill(4)+'.jpg', cl)
         hs[s].append(h)
-
-
-
-
 
 
 def nn_classifier(test_X, train_X, train_y):
@@ -163,11 +153,11 @@ def nn_classifier(test_X, train_X, train_y):
     return predictions
 
 
-def compute_accuracy(predictions,truth):
-    return np.float_(np.sum(predictions == truth))/truth.shape[0]
+def compute_accuracy(predictions, truth):
+    return np.float_(np.sum(predictions == truth)) / truth.shape[0]
 
 
-def knn(test_x,train_x,train_y,k):
+def knn(test_x, train_x, train_y, k):
     predictions = []
     for i in range(len(test_x)):
         # Initialize the predicted label to nonsense class label
@@ -185,15 +175,15 @@ def knn(test_x,train_x,train_y,k):
     return predictions
 
 
-#Predict the distance-weighted label of a data point
+# Predict the distance-weighted label of a data point
 def weighted_nn(test_x, train_x, train_y):
     predictions = []
     for i in range(len(test_x)):
         prediction = -1
         label_score = 0.0
 
-        #Go through all the training points and calculate the weights
-        #Then see which class has the highest score based on these weights
+        # Go through all the training points and calculate the weights
+        # Then see which class has the highest score based on these weights
         weights = np.zeros(len(train_x))
         dists = distances(test_x[i], train_x)
         sums = {}
@@ -204,19 +194,16 @@ def weighted_nn(test_x, train_x, train_y):
             else:
                 sums[train_y[j]] = weights[j]
 
-        label_score = sums[max(sums, key=sums.get)] / sum(sums.itervalues()) # divide max of weight by total sum of weights
+        # divide max of weight by total sum of weights
+        label_score = sums[max(sums, key=sums.get)] / sum(sums.itervalues())
         prediction = max(sums, key=sums.get)
         predictions.append(prediction)
         
     return predictions
 
 
-
-
-
-
 names = labels
-#Concatenate training data:
+# Concatenate training data:
 X = []
 y = []
 for k in hs.keys():
@@ -230,14 +217,15 @@ p = []
 t = []
 print 'Actual'.rjust(10)+'Predicted'.rjust(20)+'\n-----------------------------------'
 for s in names:
-    for i in xrange(1,21):
-        h = make_histogram_from_image(img_dir+s+"/"+s+"_"+str(i).zfill(4)+'.jpg',cl)
-        h = np.reshape(h,(1,len(h)))
-        #p.append(np.int_(nn_classifier(h, X, y)[0]))  #NN=1
-        #p.append(np.int_(weighted_nn(h, X, y)[0]))  #WEIGHTED NN
-        p.append(np.int_(knn(h, X, y, 10)[0]))  #KNN
+    for i in xrange(1, 21):
+        h = make_histogram_from_image(img_dir+s+"/"+s+"_"+str(i).zfill(4)+'.jpg', cl)
+        h = np.reshape(h, (1, len(h)))
+        # p.append(np.int_(nn_classifier(h, X, y)[0]))  # NN=1
+        # p.append(np.int_(weighted_nn(h, X, y)[0]))  # WEIGHTED NN
+        p.append(np.int_(knn(h, X, y, 10)[0]))  # KNN
         t.append(names.index(s))
         print s.rjust(10)+names[p[-1]].rjust(20)
-print '\nOverall Accuracy:',compute_accuracy(np.array(p),np.array(t))
+print '\nOverall Accuracy:', compute_accuracy(np.array(p), np.array(t))
 for i in xrange(10):
-    print '\n'+names[i].upper().rjust(7)+' Accuracy:',compute_accuracy(np.array(p[i*5:(i*5)+5]),np.array(t[i*5:(i*5)+5]))
+    print '\n'+names[i].upper().rjust(7)+' Accuracy:', compute_accuracy(np.array(p[i*5:(i*5)+5]),
+                                                                        np.array(t[i*5:(i*5)+5]))
