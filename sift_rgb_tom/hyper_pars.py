@@ -1,5 +1,5 @@
 # no of cores to use
-N_JOBS = 1
+N_JOBS = 2
 
 # select features to combine
 USE_SIFT = True
@@ -24,9 +24,9 @@ SIFT_HESSIAN_POINT_NSM_NEIGHBORHOOD = 10
 RGB_PATCH_SIZE = (3, 3)
 
 # code book generation
-CODE_BOOK_KMEANS_CLUSTERS = 80
+CODE_BOOK_KMEANS_CLUSTERS = 100
 CODE_BOOK_KMEANS_USE_MINI_BATCH = True
 
 # k nearest neighbor classifier
-CLASSIFIER_KNN_NEIGHBORS = 5
+CLASSIFIER_KNN_NEIGHBORS = 10
 CLASSIFIER_KNN_WEIGHTS = 'uniform'
