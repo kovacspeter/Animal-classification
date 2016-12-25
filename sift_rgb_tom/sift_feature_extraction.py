@@ -44,8 +44,12 @@ def get_image_sift_points(image_path):
     return points
 
 
-def get_sift_features_from_image(image_path, points):
-    # calc SIFT features from sift points - 128 dim vector per SIFT point - some SIFT points will be discarded
-    _, sift_features = sift.compute_sift_to_points(image_path, points,
-                                                   sigma=1.0, nr_orient_bins=8, nr_spat_bins=4, nr_pix_per_bin=4)
-    return sift_features
+def get_sift_descriptors_from_image(image_path, key_points):
+    # calc SIFT features from sift key_points - 128 dim vector per SIFT point - some SIFT key_points will be discarded
+    used_key_points, sift_features = sift.compute_sift_to_points(image_path,
+                                                                 key_points,
+                                                                 sigma=1.0,
+                                                                 nr_orient_bins=8,
+                                                                 nr_spat_bins=4,
+                                                                 nr_pix_per_bin=4)
+    return used_key_points, sift_features
