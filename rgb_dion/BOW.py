@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import scipy.misc
-import matplotlib.pyplot as plt
 from sklearn.feature_extraction.image import extract_patches_2d
 from sklearn.cluster import k_means
 
@@ -14,7 +13,7 @@ images = [d + '/' + f for d in sub_dirs for f in os.listdir(d)
 labels = [f for f in os.listdir(img_dir) if not f.startswith('.')]
 
 
-# Cluster a set of features into k clusters.
+# Cluster a set of features into k clusters. note: use mini batch, it's faster
 def cluster_data(features, k, nr_iter=25):
     centroids = k_means(features, n_clusters=k, max_iter=nr_iter)[0]
     return centroids
@@ -28,13 +27,13 @@ def patch_vectors(img, patch_nr, patch_size=(3, 3)):
     # We define the output array with the expected size
     output = np.zeros((patch_nr, patch_h*patch_w*3))
     
-    patches = extract_patches_2d(img, patch_size, patch_nr)
+    patches = extract_patches_2d(img, patch_size, patch_nr)  # randomly extract [patch_nr] of patches size [patch_size]
     output[:, :] = np.reshape(patches, (patch_nr, np.prod(np.shape(patches)[1:])))[:, :]
     
     return output
 
 
-# This function will take a list of image filenames and the desired number of clusters,
+# This function will take a list of image file names and the desired number of clusters,
 # Extract patches from each image using the patch_vectors function, then perform clustering
 # On the patches from all the input images. These clusters will be returned as a (k x N)
 # array, where k is the number of clusters, and N is the length of the vectors.
@@ -62,19 +61,20 @@ def patch_clusters(image_filenames, nr_clusters, nr_patches_per_img=200, patch_s
 image_filenames = images
 
 # We set the number of clusters to 32.
-cl = patch_clusters(image_filenames,32)
+cl = patch_clusters(image_filenames, 32)
 
 
 # A function to generate histograms for an image
 def make_histogram_from_image(imagepath, cl):
     img = scipy.misc.imread(imagepath)
     test_patches = extract_patches_2d(img, (3, 3), max_patches=500)
+    assert len(test_patches) == 500
     test_patches = np.reshape(test_patches, (np.shape(test_patches)[0], np.prod(np.shape(test_patches)[1:])))
     
     return create_histogram(test_patches, cl)
 
 
-# Create a bag-of-words histogram from a set of features given the clusters.
+# Create a bag-of-words histogram from a set of features given the clusters. tip: use numpy histogram for speed
 def create_histogram(samples, clusters):
     assignments = cluster_assignment(samples, clusters)
     histogram = np.zeros(clusters.shape[0], dtype=np.float)
@@ -85,7 +85,7 @@ def create_histogram(samples, clusters):
         
     # Normalize the histogram such that the sum of the bins is equal to 1.
     for j in range(len(histogram)):
-        histogram[j] = histogram[j] / float(len(assignments))
+        histogram[j] /= float(len(assignments))
     
     return histogram
 
@@ -93,8 +93,6 @@ def create_histogram(samples, clusters):
 # For each sample, find the nearest cluster.
 def cluster_assignment(samples, clusters):
     nr_samples = samples.shape[0]
-    nr_clusters = clusters.shape[0]
-    
     assignments = np.zeros(nr_samples, dtype=int)
     
     # For each data sample, compute the distance to each cluster.
@@ -107,7 +105,7 @@ def cluster_assignment(samples, clusters):
     return assignments
 
 
-# Compute the Euclidean distance between 2 features.
+# Compute the Euclidean distance between 2 features. tip: use numpy euclidean distance for speed
 def euclidean_distance(x, y):
     assert(len(x) == len(y))
     
@@ -144,12 +142,12 @@ for i in xrange(1, 6):
 
 def nn_classifier(test_X, train_X, train_y):
     predictions = np.zeros(test_X.shape[0])
-        
+
     for i in range(len(test_X)):
         dists = distances(test_X[i], train_X)
         sorted_zip = sorted(zip(dists, train_y))
         predictions[i] = sorted_zip[0][1]
-  
+
     return predictions
 
 
