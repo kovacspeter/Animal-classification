@@ -85,3 +85,10 @@ class Dataset():
         indices = np.arange(len(self.train))
         np.random.shuffle(indices)
         return self.train[indices[:batch_size]], self.train_labels[indices[:batch_size]]
+
+
+# dataset = Dataset(rescale_imgs=True,
+#                       img_shape=(32, 32))
+#
+# val_images, val_labels = dataset.val, dataset.val_labels
+# print val_labels.shape
