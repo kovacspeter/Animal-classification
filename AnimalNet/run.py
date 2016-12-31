@@ -1,4 +1,4 @@
-from AnimalNet import AnimalNet_Alex, AnimalNet_VGG
+from AnimalNet import AnimalNet_Alex, AnimalNet_VGG, AnimalNet_Ensemb
 import tensorflow as tf
 import numpy as np
 from data_utils import Dataset
@@ -32,10 +32,10 @@ def train():
     # For reproducible research :)
     tf.set_random_seed(42)
     np.random.seed(42)
-    if FLAGS.architecture == "alexnet":
-        IMG_SIZE = 227
-    else:
+    if FLAGS.architecture == "vgg":
         IMG_SIZE = 224
+    else:
+        IMG_SIZE = 227
 
     dataset = Dataset(rescale_imgs=True,
                       img_shape=(IMG_SIZE, IMG_SIZE),
@@ -54,16 +54,23 @@ def train():
                              dropout_rate=FLAGS.dropout,
                              regularization_scale=FLAGS.l2_reg,
                              refine_after=FLAGS.refine_after)
-    else:
+    elif FLAGS.architecture == "vgg":
         net = AnimalNet_VGG(num_classes=10,
                             dropout_rate=FLAGS.dropout,
                             regularization_scale=FLAGS.l2_reg,
                             refine_after=FLAGS.refine_after)
+    elif FLAGS.architecture == 'ensemb':
+        net = AnimalNet_Ensemb(num_classes=10,
+                               dropout_rate=FLAGS.dropout,
+                               regularization_scale=FLAGS.l2_reg,
+                               refine_after=FLAGS.refine_after)
 
     stop_training_op = net._set_training_op(False)
     start_training_op = net._set_training_op(True)
-
-    logits = net.inference(input, e, FLAGS.feature_layer)
+    if FLAGS.architecture == 'ensemb':
+        logits = net.inference(input, e)
+    else:
+        logits = net.inference(input, e, FLAGS.feature_layer)
     loss_op = net.loss(logits, labels)
     acc_op = net.accuracy(logits, labels)
 
@@ -104,17 +111,27 @@ def train():
             print("--------------------------------------------------")
 
             if not submission:
-
+                # ENSEMB WONT FIT INTO MEMORY :/ - if this is uncommented then there is also problem
+                # with confusion matrix.
+                # ------------------------
+                # predictions = []
+                # for i in range(4):
+                #     val_feed_dict = {input: val_images[i * 50:(i + 1) * 50],
+                #                      e: epoch}
+                #     predictions.append(sess.run(logits, val_feed_dict))
+                # predictions = np.concatenate(predictions)
+                # predictions = np.argmax(predictions, 1)
+                #
+                # correct_prediction = (predictions == np.argmax(val_labels, 1)) * 1.0
+                # acc = np.mean(correct_prediction)
                 val_feed_dict = {input: val_images,
                                  labels: val_labels,
                                  e: epoch}
-
                 loss, acc, summary_str = sess.run([loss_op, acc_op, summary], val_feed_dict)
 
                 test_writer.add_summary(summary_str, epoch)
                 test_writer.flush()
                 print("Validation set accuracy is: ", acc)
-                print("Validation set loss is: ", loss)
                 print("--------------------------------------------------")
 
         else:
@@ -138,7 +155,8 @@ def train():
         # we need to split test data to batches
         predictions = []
         for i in range(5):
-            test_feed_dict = {input: dataset.test[i*100:(i+1)*100]}
+            test_feed_dict = {input: dataset.test[i*100:(i+1)*100],
+                              e: 0}
             predictions.append(sess.run(logits, test_feed_dict))
         predictions = np.concatenate(predictions)
         test_labels = np.argmax(predictions, 1)
@@ -214,7 +232,7 @@ def main(_):
         if FLAGS.architecture == 'vgg':
             FLAGS.feature_layer = "VGG/pool5:0"
         else:
-            FLAGS.feature_layer = "AlexNet/fc8/Relu:0"
+            FLAGS.feature_layer = "AlexNet/fc6/Relu:0"
 
     for key, value in vars(FLAGS).items():
         print(key + ' : ' + str(value))
