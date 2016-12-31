@@ -14,6 +14,8 @@ from rgb_feature_extraction import get_rgb_features_from_image
 logger = logging.getLogger(__file__)
 data_path = '../data/'
 
+LOGGER_LEVEL_RESULT = 25
+
 
 def get_sift_key_points(image_paths, set_name):
     # get sift points of interest - set flag to reuse previous points
@@ -81,6 +83,8 @@ def create_histogram_from_descriptors(descriptors, clusters):
     if descriptors.shape[0] != 0:
         feature_cluster = euclidean_distances(clusters, descriptors).argmin(axis=0)
         histogram = np.bincount(feature_cluster, minlength=clusters.shape[0]) / descriptors.shape[0]
+        if hyper_pars.HISTOGRAM_IS_BINARY:
+            histogram[histogram > 0] = 1
     else:
         # return empty histogram for images without descriptors
         # e.g. killer+whale_0011.jpg has no Harris points
@@ -145,7 +149,7 @@ def run_classification():
     val_labels = get_val_labels()
 
     # get sift points
-    if False:
+    if True:
         train_points_dict = get_sift_key_points(train_images, 'train')
         val_points_dict = get_sift_key_points(val_images, 'val')
     else:
@@ -161,30 +165,32 @@ def run_classification():
         val_descriptors_dict = pickle.load(open('data/val_descriptors.dat', 'rb'))
 
     # create code book / clusters
-    if True:
-        all_train_features = np.vstack(train_descriptors_dict.values())
-        code_book = create_code_book(all_train_features)
-    else:
-        code_book = np.load('data/code_book.npy')
+    for hyper_pars.CODE_BOOK_KMEANS_CLUSTERS in range(100, 1400, 100):
+        logger.log(LOGGER_LEVEL_RESULT, 'k-means cluster size: {}'.format(hyper_pars.CODE_BOOK_KMEANS_CLUSTERS))
+        if True:
+            all_train_descriptors = np.vstack(train_descriptors_dict.values())
+            code_book = create_code_book(all_train_descriptors)
+        else:
+            code_book = np.load('data/code_book.npy')
 
-    # create histograms
-    if True:
-        train_histograms = create_histograms(code_book, train_images, train_descriptors_dict, 'train')
-        val_histograms = create_histograms(code_book, val_images, val_descriptors_dict, 'val')
-    else:
-        train_histograms = np.load('data/train_histograms.npy')
-        val_histograms = np.load('data/val_histograms.npy')
+        # create histograms
+        if True:
+            train_histograms = create_histograms(code_book, train_images, train_descriptors_dict, 'train')
+            val_histograms = create_histograms(code_book, val_images, val_descriptors_dict, 'val')
+        else:
+            train_histograms = np.load('data/train_histograms.npy')
+            val_histograms = np.load('data/val_histograms.npy')
 
-    # classify images
-    predictions = classify(train_histograms, train_labels, val_histograms, val_labels)
-    logger.info("accuracy: {}".format(compute_accuracy(predictions, val_labels)))
+        # classify images
+        predictions = classify(train_histograms, train_labels, val_histograms, val_labels)
+        logger.log(LOGGER_LEVEL_RESULT, "accuracy: {}".format(compute_accuracy(predictions, val_labels)))
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(filename)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=LOGGER_LEVEL_RESULT, format='%(asctime)s - %(filename)s - %(levelname)s - %(message)s')
 
     # run experiment
     run_classification()
-    logger.info("DONE")
+    logger.log(LOGGER_LEVEL_RESULT, "DONE")
 
 

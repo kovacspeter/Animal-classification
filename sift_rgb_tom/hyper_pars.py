@@ -3,7 +3,7 @@ N_JOBS = 2
 
 # select features to combine
 USE_SIFT = True
-USE_RGB = True
+USE_RGB = False
 
 # sift point types
 SIFT_USE_DENSE_POINTS = True
@@ -21,12 +21,16 @@ SIFT_HESSIAN_POINT_MAG_THRESHOLD = 5
 SIFT_HESSIAN_POINT_NSM_NEIGHBORHOOD = 10
 
 # rgb features
-RGB_PATCH_SIZE = (1, 1)
+RGB_PATCH_SIZE = (3, 3)
 
 # code book generation
 CODE_BOOK_KMEANS_CLUSTERS = 1000
 CODE_BOOK_KMEANS_USE_MINI_BATCH = True
+CODE_BOOK_DISTANCE = None
+
+# histogram
+HISTOGRAM_IS_BINARY = True
 
 # k nearest neighbor classifier
-CLASSIFIER_KNN_NEIGHBORS = 10
+CLASSIFIER_KNN_NEIGHBORS = 20
 CLASSIFIER_KNN_WEIGHTS = 'uniform'
